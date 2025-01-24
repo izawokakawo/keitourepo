@@ -3,6 +3,7 @@ import requests
 import argparse
 
 REPO_URL = "https://raw.githubusercontent.com/izawokakawo/keitourepo/main"  # URL для доступа к файлам
+API_URL = "https://api.github.com/repos/izawokakawo/keitourepo/contents"  # URL для доступа к API
 TARGET_DIRECTORY = "KeitouOSDirectory/usr"
 
 def ensure_target_directory():
@@ -41,19 +42,39 @@ def update_package(package_name):
     else:
         print(f"Пакет {package_name} не установлен. Установите его с помощью команды 'kitkat install {package_name}'.")
 
+def list_packages():
+    try:
+        response = requests.get(API_URL)
+        response.raise_for_status()  # Проверяем, что запрос успешен
+        
+        packages = [item['name'] for item in response.json() if item['name'].endswith('.py')]
+        
+        if packages:
+            print("Доступные пакеты:")
+            for package in packages:
+                print(f" - {package[:-3]}")  # Убираем .py из имени
+        else:
+            print("Нет доступных пакетов.")
+    except Exception as e:
+        print(f"Произошла ошибка при получении списка пакетов: {e}")
+
 def main():
     ensure_target_directory()  # Убедимся, что целевая директория существует
 
     parser = argparse.ArgumentParser(description='Пакетный менеджер KitKat для KeitouOS')
-    parser.add_argument('command', choices=['install', 'update'], help='Команда для выполнения')
-    parser.add_argument('package', help='Имя пакета (без .py)')
+    parser.add_argument('command', choices=['install', 'update', 'list'], help='Команда для выполнения')
+    parser.add_argument('package', nargs='?', help='Имя пакета (без .py)')
 
     args = parser.parse_args()
 
-    if args.command == 'install':
+    if args.command == 'install' and args.package:
         download_package(args.package)
-    elif args.command == 'update':
+    elif args.command == 'update' and args.package:
         update_package(args.package)
+    elif args.command == 'list':
+        list_packages()
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
