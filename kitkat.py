@@ -1,6 +1,8 @@
 import os
 import requests
 import argparse
+import sys
+import time
 
 REPO_URL = "https://raw.githubusercontent.com/izawokakawo/keitourepo/main"  # URL для доступа к файлам
 API_URL = "https://api.github.com/repos/izawokakawo/keitourepo/contents"  # URL для доступа к API
@@ -21,13 +23,23 @@ def download_package(package_name):
     file_url = f"{REPO_URL}/{package_name}.py"
     
     try:
-        response = requests.get(file_url)
+        response = requests.get(file_url, stream=True)
         response.raise_for_status()  # Проверяем, что запрос успешен
         
-        # Сохраняем файл в целевую директорию
-        with open(target_path, 'wb') as file:
-            file.write(response.content)
+        # Получаем общий размер файла для индикатора прогресса
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded_size = 0
         
+        # Сохраняем файл в целевую директорию с индикатором прогресса
+        with open(target_path, 'wb') as file:
+            for data in response.iter_content(chunk_size=1024):
+                file.write(data)
+                downloaded_size += len(data)
+                # Обновляем индикатор прогресса
+                progress = downloaded_size / total_size * 100
+                print(f"\rСкачивание {package_name}: [{'#' * int(progress // 2):<50}] - {progress:.2f}%", end="")
+        
+        print()  # Переход на новую строку после завершения загрузки
         print(f"Пакет {package_name} успешно установлен.")
     except requests.HTTPError:
         print(f"Пакет {package_name} не найден в репозитории.")
@@ -58,11 +70,27 @@ def list_packages():
     except Exception as e:
         print(f"Произошла ошибка при получении списка пакетов: {e}")
 
+def update_all_packages():
+    try:
+        response = requests.get(API_URL)
+        response.raise_for_status()  # Проверяем, что запрос успешен
+        
+        packages = [item['name'] for item in response.json() if item['name'].endswith('.py')]
+        
+        if packages:
+            print("Обновление всех пакетов...")
+            for package in packages:
+                update_package(package[:-3])  # Убираем .py из имени
+        else:
+            print("Нет доступных пакетов для обновления.")
+    except Exception as e:
+        print(f"Произошла ошибка при получении списка пакетов: {e}")
+
 def main():
     ensure_target_directory()  # Убедимся, что целевая директория существует
 
     parser = argparse.ArgumentParser(description='Пакетный менеджер KitKat для KeitouOS')
-    parser.add_argument('command', choices=['install', 'update', 'list'], help='Команда для выполнения')
+    parser.add_argument('command', choices=['install', 'update', 'list', 'update-all'], help='Команда для выполнения')
     parser.add_argument('package', nargs='?', help='Имя пакета (без .py)')
 
     args = parser.parse_args()
@@ -73,6 +101,8 @@ def main():
         update_package(args.package)
     elif args.command == 'list':
         list_packages()
+    elif args.command == 'update-all':
+        update_all_packages()
     else:
         parser.print_help()
 
